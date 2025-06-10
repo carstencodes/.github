@@ -34,6 +34,21 @@ In some rare cases, these parts do not apply to the direction of the software. P
 
 Your changes might be so extensive, that some automatic tests might be required in order to proof them to work. Please add tests on free will or on request.
 
+### Commit messages
+
+- Use conventional commits
+- Provide both - title and body
+
+Be as precise as you have to be.
+
+### Signed commits
+
+Signed commits are welcome, but not required.
+
+### Linear history
+
+Every commit has its reason and should not be forgot. Therefore, squash-merges will not be accepted. Please use rebasing merges.
+
 ## Coding conventions
 
 The coding conventions fit the style of the author, which may not always be suitable for the mass. This may be enforced by styling rules during pull requests or as pre-commit checks.
