@@ -8,4 +8,4 @@ This repository simply contains
 
 Issue, Discussions and pull-request templates as well as SECURITY and SUPPORT information are about to be created.
 
-For more details about me, please refer to [my personal information repository](https://github.com/carstencodes/carstencodes/ReadMe.md).
+For more details about me, please refer to [my personal information repository](https://github.com/carstencodes/carstencodes/).
