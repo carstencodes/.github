@@ -19,7 +19,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          repositories="$(gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
+          repositories="$(gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' \
+            | jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
 
           ignore_file=".settings/.settingsignore"
           if [ -f "$ignore_file" ]; then
