@@ -15,6 +15,9 @@ jobs:
     outputs:
       repositories: ${{ steps.list.outputs.repositories }}
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
       - name: Discover public repositories
         id: list
         env:
@@ -25,11 +28,17 @@ jobs:
             --jq '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .full_name' \
             > repo-names.txt || true
 
-          # Read ignore patterns (strip comments and blank lines)
-          ignore_patterns=$(grep -v '^#' .settings/.settingsignore | grep -v '^[[:space:]]*$' || true)
+          # Initialize empty ignore list if file doesn't exist
+          if [[ -f .settings/.settingsignore ]]; then
+            ignore_patterns=$(grep -v '^#' .settings/.settingsignore | grep -v '^[[:space:]]*$' || true)
+          else
+            echo "Warning: .settings/.settingsignore not found, proceeding without exclusions" >&2
+            ignore_patterns=""
+          fi
 
           # Filter out repos matching ignore patterns (glob where * matches any substring)
-          filtered_repos=$(while IFS= read -r repo; do
+          # Output directly to file (don't capture in $() simultaneously)
+          while IFS= read -r repo; do
             match=false
             while IFS= read -r pattern; do
               [[ -z "$pattern" ]] && continue
@@ -60,7 +69,8 @@ jobs:
         # matrix.repository will be "owner/repo"
         repository: ${{ fromJSON(needs.discover.outputs.repositories) }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout repo
+        uses: actions/checkout@v7
 
       - name: Require repository settings file
         run: |
