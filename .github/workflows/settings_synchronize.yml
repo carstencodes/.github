@@ -15,6 +15,7 @@ permissions:
 jobs:
   discover:
     runs-on: ubuntu-latest
+    name: Discover repos to synchronize
     outputs:
       repositories: ${{ steps.list.outputs.repositories }}
     steps:
@@ -23,12 +24,45 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          repositories="$(gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' --jq '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
-          matrix="$(printf '%s\n' "$repositories" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          # Emit owner/repo (.full_name) one per line, excluding forks/archived/private
+          gh api --paginate 'users/${{ github.repository_owner }}/repos?per_page=100&type=owner&sort=full_name' \
+            --jq '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .full_name' \
+            > repo-names.txt || true
+
+          # Initialize empty ignore list if file doesn't exist
+          if [[ -f .settings/.settingsignore ]]; then
+            ignore_patterns=$(grep -v '^#' .settings/.settingsignore | grep -v '^[[:space:]]*$' || true)
+          else
+            echo "Warning: .settings/.settingsignore not found, proceeding without exclusions" >&2
+            ignore_patterns=""
+          fi
+
+          # Filter out repos matching ignore patterns (glob where * matches any substring)
+          # Output directly to file (don't capture in $() simultaneously)
+          while IFS= read -r repo; do
+            repo_name="${repo##*/}"
+            match=false
+            while IFS= read -r pattern; do
+              [[ -z "$pattern" ]] && continue
+              # Convert glob pattern to regex (* -> .*)
+              regex_pattern="^${pattern//\*/.*}$"
+              if [[ "$repo_name" =~ $regex_pattern ]]; then
+                match=true
+                break
+              fi
+            done <<< "$ignore_patterns"
+            if ! $match; then
+              echo "$repo"
+            fi
+          done < repo-names.txt > filtered-repos.txt
+
+          # Build a JSON array from newline-separated owner/repo strings
+          matrix=$(jq -R -s -c 'split("\n") | map(select(length > 0))' filtered-repos.txt)
           echo "repositories=$matrix" >> "$GITHUB_OUTPUT"
 
   synchronize:
     needs: discover
+    name: Synchronize settings
     if: needs.discover.outputs.repositories != '[]'
     runs-on: ubuntu-latest
     strategy:
@@ -36,7 +70,8 @@ jobs:
       matrix:
         repository: ${{ fromJSON(needs.discover.outputs.repositories) }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7
 
       - name: Require repository settings file
         env:
