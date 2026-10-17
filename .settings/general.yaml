@@ -2,3 +2,100 @@
 
 repository:
   delete_branch_on_merge: true
+  enable_git_lfs: false
+  enable_sponsorships: true
+  enable_immutable_releases: true
+  issue_creation_policy: all
+  allow_merge_commit: false
+  allow_squash_merge: false
+
+labels: 
+  entries:
+    - name: accessibility
+      color: "5319e7"
+      description: "Indicates a barrier affecting people with disabilities"
+    - name: bug
+      color: "d73a4a"
+      description: "Indicates an unexpected problem or unintended behavior"
+    - name: documentation
+      color: "0075ca"
+      description: "Indicates a need for improvements or additions to documentation"
+    - name: duplicate
+      color: "cfd3d7"
+      description: "Indicates similar issues, pull requests, or discussions"
+    - name: enhancement
+      color: "a2eeef"
+      description: "Indicates new feature requests"
+    - name: good first issue
+      color: "7057ff"
+      description: "Indicates a good issue for first-time contributors"
+    - name: help wanted
+      color: "008672"
+      description: "Indicates that a maintainer wants help on an issue or pull request"
+    - name: invalid
+      color: "e4e669"
+      description: "Indicates that an issue, pull request, or discussion is no longer relevant"
+    - name: question
+      color: "d876e3"
+      description: "Indicates that an issue, pull request, or discussion needs more information"
+    - name: wontfix
+      color: "ffffff"
+      description: "Indicates that work won't continue on an issue, pull request, or discussion"
+    - name: "priority:high"
+      color: "b60205"
+      description: "An urgent issue worth to be picked next in queue"
+    - name: "priority:medium"
+      color: "fbca04"
+      description: "An issue to be scheduled for medium time range"
+    - name: "priority:low"
+      color: "0e8a16"
+      description: "An issue worth to be picked when it is time"
+    - name: "effort:unknown"
+      color: "d9d9d9"
+      description: "Issue with unknown effort"
+    - name: "effort:large"
+      color: "245ea8"
+      description: "Issue with huge impact"
+    - name: "effort:medium"
+      color: "6fa8dc"
+      description: "Issue with a regular size"
+    - name: "effort:small"
+      color: "c5def5"
+      description: "Issue that will be created in a small amount of time"
+    - name: sponsorship
+      color: "d4af37"
+      description: "An issue indicating pure commercial intend - funding is desired"
+    - name: "breaking:none"
+      color: "1a7f37"
+      description: "This issue will not break API or depending implementations"
+    - name: "breaking:sources"
+      color: "f9a825"
+      description: "This issue will break API or depending implementations on source code level"
+    - name: "breaking:binary"
+      color: "e36209"
+      description: "This issue will break API or depending implementations on binary level"
+    - name: "breaking:runtime"
+      color: "a30000"
+      description: "This issue will break API or depending implementations not syntactically, but behavioral"
+
+rulesets: 
+  entries:
+    - name: Protected Main Branch
+      bypass_actors: []
+      target: branch
+      enforcement: active
+      conditions:
+        ref_name:
+          include: ["~DEFAULT_BRANCH"]
+          exclude: []
+      rules:
+        - type: deletion
+        - type: pull_request
+          parameters:
+            allowed_merge_methods: [ "rebase", "merge" ]
+            dismiss_stale_reviews_on_push: true
+            require_code_owner_review: true
+            require_last_push_approval: false
+            required_approving_review_count: 0
+            required_review_thread_resolution: true
+        - type: non_fast_forward
