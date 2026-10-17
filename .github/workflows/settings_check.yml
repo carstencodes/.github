@@ -14,6 +14,8 @@ jobs:
     outputs:
       repositories: ${{ steps.list.outputs.repositories }}
     steps:
+      - uses: actions/checkout@v7
+
       - name: Discover public repositories
         id: list
         env:
@@ -52,22 +54,20 @@ jobs:
         repository: ${{ fromJSON(needs.discover.outputs.repositories) }}
     steps:
       - uses: actions/checkout@v7
+
       - name: Require repository settings file
-        env:
-          REPOSITORY: ${{ matrix.repository }}
         run: |
-          test -f ".settings/repository/${REPOSITORY}.yaml" || {
-            echo "::error::Missing .settings/repository/${REPOSITORY}.yaml for discovered repository carstencodes/${REPOSITORY}"
+          if [ ! -f ".settings/repository/${{ matrix.repository }}.yaml" ]; then
+            echo "::error::Missing .settings/repository/${{ matrix.repository }}.yaml for discovered repository carstencodes/${{ matrix.repository }}"
             exit 1
-          }
+          fi
+
       - name: Render shared and repository settings
-        uses: Vivswan/github-settings-as-code@v2
-        with:
-          mode: render
-          settings-file: |
-            .settings/general.yaml
-            .settings/repository/${{ matrix.repository }}.yaml
-          rendered-file: ${{ runner.temp }}/settings.yml
+        run: |
+          mkdir -p "$(dirname "${{ runner.temp }}/settings.yml")"
+          # Add a YAML document separator between files to be safe:
+          (cat .settings/general.yaml; echo; echo '---'; cat .settings/repository/${{ matrix.repository }}.yaml) > "${{ runner.temp }}/settings.yml"
+
       - name: Check repository settings
         uses: Vivswan/github-settings-as-code@v2
         with:
