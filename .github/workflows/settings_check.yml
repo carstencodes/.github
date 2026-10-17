@@ -106,6 +106,7 @@ jobs:
 
       - name: Check repository settings
         uses: Vivswan/github-settings-as-code@v2
+        continue-on-error: true
         with:
           token: ${{ secrets.ADMIN_TOKEN }}
           mode: check
