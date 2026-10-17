@@ -19,7 +19,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          repositories="$(gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' --jq '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
+          repositories="$(gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
+
+          ignore_file=".settings/.settingsignore"
+          if [ -f "$ignore_file" ]; then
+            while IFS= read -r pattern; do
+              pattern="${pattern%%#*}"
+              pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+              pattern="${pattern%"${pattern##*[![:space:]]}"}"
+              [ -z "$pattern" ] && continue
+
+              repositories="$(printf '%s\n' "$repositories" | while IFS= read -r repo; do
+                case "$repo" in
+                  $pattern) continue ;;
+                esac
+                printf '%s\n' "$repo"
+              done)"
+            done < "$ignore_file"
+          fi
+
           matrix="$(printf '%s\n' "$repositories" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
           echo "repositories=$matrix" >> "$GITHUB_OUTPUT"
 
