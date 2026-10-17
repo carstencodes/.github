@@ -1,0 +1,136 @@
+# Propose default repository settings from .settings/repository/.template.yaml
+# For each public, non-fork, non-archived repo that is not ignored and that
+# doesn't have a corresponding .settings/repository/<repo>.yaml file, create
+# a branch in this repo adding that file and open a pull request.
+#
+# Requirements:
+# - .settings/repository/.template.yaml must exist and contain the desired default.
+# - .settings/.settingsignore may exist (one glob pattern per non-comment line).
+# - secrets.ADMIN_TOKEN must be set and have write permissions on this repo.
+#
+name: Propose default repository settings
+
+on:
+  workflow_dispatch:
+  # optionally schedule:
+  # schedule:
+  #   - cron: "0 7 * * 1"
+
+permissions:
+  contents: write
+
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout settings repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Ensure gh is available
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "gh not found, installing..."
+            sudo apt-get update
+            sudo apt-get install -y gh
+          fi
+          gh --version
+
+      - name: Propose default settings for missing repositories
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          OWNER: carstencodes
+          SETTINGS_DIR: .settings/repository
+          IGNORE_FILE: .settings/.settingsignore
+        run: |
+          set -euo pipefail
+          export GH_TOKEN="${ADMIN_TOKEN}"
+
+          # Discover public, non-fork, non-archived repositories owned by $OWNER
+          repos="$(gh api --paginate "users/${OWNER}/repos?per_page=100&type=owner&sort=full_name" --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
+
+          # Apply ignore list (optional). The ignore file supports simple globbing (*)
+          if [ -f "${IGNORE_FILE}" ]; then
+            filtered=""
+            while IFS= read -r pattern || [ -n "$pattern" ]; do
+              # strip comments and leading/trailing whitespace
+              pattern="${pattern%%#*}"
+              pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+              pattern="${pattern%"${pattern##*[![:space:]]}"}"
+              [ -z "$pattern" ] && continue
+
+              # filter out matching repos
+              repos="$(printf '%s\n' "$repos" | while IFS= read -r r; do
+                case "$r" in
+                  $pattern) continue ;;
+                esac
+                printf '%s\n' "$r"
+              done)"
+            done < "${IGNORE_FILE}"
+          fi
+
+          TEMPLATE_FILE="${SETTINGS_DIR}/.template.yaml"
+          if [ ! -f "${TEMPLATE_FILE}" ]; then
+            echo "::error::Template not found at ${TEMPLATE_FILE}; aborting"
+            exit 1
+          fi
+
+          # Push destination repo URL using token
+          remote_url="https://x-access-token:${ADMIN_TOKEN}@github.com/${OWNER}/.github.git"
+
+          # For each repo, if settings file missing, create branch, add file, push and open PR
+          while IFS= read -r repo || [ -n "$repo" ]; do
+            [ -z "$repo" ] && continue
+            target="${SETTINGS_DIR}/${repo}.yaml"
+
+            if [ -f "$target" ]; then
+              echo "Skipping ${repo}: settings file already exists at ${target}"
+              continue
+            fi
+
+            # Deterministic branch name so attempts are idempotent
+            branch="setup/add-settings-${repo}"
+            # If remote branch already exists, skip (assumes a prior run already proposed)
+            if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+              echo "Skipping ${repo}: branch ${branch} already exists on remote"
+              continue
+            fi
+
+            # Create branch from current default branch (checked-out)
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" checkout -b "$branch"
+
+            mkdir -p "$(dirname "$target")"
+            cp "$TEMPLATE_FILE" "$target"
+
+            git add "$target"
+            git commit -m "chore(settings): add default settings for ${repo} from template"
+
+            # Push branch using ADMIN_TOKEN (not GITHUB_TOKEN)
+            if git push "$remote_url" "HEAD:${branch}"; then
+              echo "Pushed branch ${branch} for ${repo}"
+            else
+              echo "::warning::Failed to push branch ${branch} for ${repo}; skipping PR creation"
+              git checkout --detach
+              git branch -D "$branch" || true
+              continue
+            fi
+
+            # Create PR if one does not already exist
+            existing_pr="$(gh pr list --repo "${OWNER}/.github" --head "${branch}" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
+            if [ -n "$existing_pr" ]; then
+              echo "PR already exists (#${existing_pr}) for branch ${branch}; skipping"
+            else
+              gh pr create --repo "${OWNER}/.github" \
+                --title "chore(settings): add default settings for ${repo}" \
+                --body "Adds a default settings file for \`${repo}\` created from \`${TEMPLATE_FILE}\`.\n\nIf this repository should be excluded from settings, add it to \`.settings/.settingsignore\`." \
+                --head "${branch}" \
+                --base main || echo "::warning::Failed to create PR for ${branch}"
+            fi
+
+            # Clean up local branch and return to main
+            git checkout --detach
+            git branch -D "$branch" || true
+          done <<< "$repos"
+
+          echo "Propose step completed."
