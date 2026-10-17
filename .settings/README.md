@@ -15,6 +15,9 @@ The baseline currently enables automatic deletion of head branches after
 pull-request merges. Review check-mode reports before relying on sync to apply
 this or any future settings.
 
+For more information, refer to 
+[settings as code](https://vivswan.github.io/github-settings-as-code/) action.
+
 ## Workflows and token
 
 Add a fine-grained personal access token as the `ADMIN_TOKEN` Actions secret
