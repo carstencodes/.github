@@ -14,15 +14,12 @@ jobs:
     outputs:
       repositories: ${{ steps.list.outputs.repositories }}
     steps:
-      - uses: actions/checkout@v7
-
       - name: Discover public repositories
         id: list
         env:
           GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          repositories="$(gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' \
-            | jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
+          repositories="$(gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
 
           ignore_file=".settings/.settingsignore"
           if [ -f "$ignore_file" ]; then
@@ -56,17 +53,32 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Require repository settings file
+        env:
+          REPOSITORY: ${{ matrix.repository }}
         run: |
-          if [ ! -f ".settings/repository/${{ matrix.repository }}.yaml" ]; then
-            echo "::error::Missing .settings/repository/${{ matrix.repository }}.yaml for discovered repository carstencodes/${{ matrix.repository }}"
+          test -f ".settings/repository/${REPOSITORY}.yaml" || {
+            echo "::error::Missing .settings/repository/${REPOSITORY}.yaml for discovered repository carstencodes/${REPOSITORY}"
+            exit 1
+          }
+
+      - name: Merge general + repository settings into single YAML (using yq)
+        env:
+          REPOSITORY: ${{ matrix.repository }}
+        run: |
+          MERGED="${{ runner.temp }}/settings.yml"
+          if [ -f ".settings/general.yaml" ] && [ -f ".settings/repository/${REPOSITORY}.yaml" ]; then
+            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' .settings/general.yaml .settings/repository/${REPOSITORY}.yaml > "$MERGED"
+          elif [ -f ".settings/repository/${REPOSITORY}.yaml" ]; then
+            cp .settings/repository/${REPOSITORY}.yaml "$MERGED"
+          elif [ -f ".settings/general.yaml" ]; then
+            cp .settings/general.yaml "$MERGED"
+          else
+            echo "::error::No settings file found (neither .settings/general.yaml nor .settings/repository/${REPOSITORY}.yaml)"
             exit 1
           fi
-
-      - name: Render shared and repository settings
-        run: |
-          mkdir -p "$(dirname "${{ runner.temp }}/settings.yml")"
-          # Add a YAML document separator between files to be safe:
-          (cat .settings/general.yaml; echo; echo '---'; cat .settings/repository/${{ matrix.repository }}.yaml) > "${{ runner.temp }}/settings.yml"
+          echo "Merged settings written to $MERGED"
+          echo "----- merged preview -----"
+          head -n 200 "$MERGED" || true
 
       - name: Check repository settings
         uses: Vivswan/github-settings-as-code@v2
