@@ -1,9 +1,12 @@
-# Ignore list for repository settings discovery.
-# Each non-empty line is a repository name pattern to skip even if it is public,
-# non-forked, and not archived. A leading or trailing space is ignored.
-# Patterns support simple shell-style globs, with '*' matching any substring.
+# Ignore list for the repository settings workflows
+# Each non-empty line is a pattern for repository names to exclude from the
+# generated repository list even if the repository is public, non-fork, and
+# not archived. Simple globbing is supported where '*' matches any substring.
 
+# All repos starting with "aoc"
 aoc*
+
+# Repository names to ignore explicitly
 .shared
 .github
 carstencodes
