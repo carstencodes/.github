@@ -67,7 +67,7 @@ jobs:
           echo "----- merged preview -----"
           head -n 200 "$MERGED" || true
 
-      - name: Debug: show repository being checked
+      - name: "[Debug] show repository being checked"
         run: |
           echo "Checking repository: carstencodes/${{ matrix.repository }}"
 
