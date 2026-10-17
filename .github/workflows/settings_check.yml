@@ -25,8 +25,28 @@ jobs:
             --jq '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .full_name' \
             > repo-names.txt || true
 
+          # Read ignore patterns (strip comments and blank lines)
+          ignore_patterns=$(grep -v '^#' .settings/.settingsignore | grep -v '^[[:space:]]*$' || true)
+
+          # Filter out repos matching ignore patterns (glob where * matches any substring)
+          filtered_repos=$(while IFS= read -r repo; do
+            match=false
+            while IFS= read -r pattern; do
+              [[ -z "$pattern" ]] && continue
+              # Convert glob pattern to regex (* -> .*)
+              regex_pattern="^${pattern//\*/.*}$"
+              if [[ "$repo" =~ $regex_pattern ]]; then
+                match=true
+                break
+              fi
+            done <<< "$ignore_patterns"
+            if ! $match; then
+              echo "$repo"
+            fi
+          done < repo-names.txt > filtered-repos.txt
+
           # Build a JSON array from newline-separated owner/repo strings
-          matrix=$(jq -R -s -c 'split("\n") | map(select(length > 0))' repo-names.txt)
+          matrix=$(jq -R -s -c 'split("\n") | map(select(length > 0))' filtered-repos.txt)
           echo "repositories=$matrix" >> "$GITHUB_OUTPUT"
 
   check:
