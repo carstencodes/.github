@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   discover:
+    name: Discover repositories
     runs-on: ubuntu-latest
     outputs:
       repositories: ${{ steps.list.outputs.repositories }}
@@ -19,63 +20,64 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          # List repositories and extract only the repository name (no owner, no objects)
+          # Emit owner/repo (.full_name) one per line, excluding forks/archived/private
           gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' \
-            --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name' \
+            --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .full_name' \
             > repo-names.txt || true
 
-          # Build a JSON array from the newline-separated names
+          # Build a JSON array from newline-separated owner/repo strings
           matrix=$(jq -R -s -c 'split("\n") | map(select(length > 0))' repo-names.txt)
           echo "repositories=$matrix" >> "$GITHUB_OUTPUT"
 
   check:
     needs: discover
+    name: Check repository settings
     if: needs.discover.outputs.repositories != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        # matrix.repository will be "owner/repo"
         repository: ${{ fromJSON(needs.discover.outputs.repositories) }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Require repository settings file
-        env:
-          REPOSITORY: ${{ matrix.repository }}
         run: |
-          test -f ".settings/repository/${REPOSITORY}.yaml" || {
-            echo "::error::Missing .settings/repository/${REPOSITORY}.yaml for discovered repository carstencodes/${REPOSITORY}"
+          # matrix.repository is owner/repo (e.g. carstencodes/my-repo)
+          REPOSITORY_FULL='${{ matrix.repository }}'
+          REPOSITORY_NAME="${REPOSITORY_FULL##*/}"   # strip owner/
+          test -f ".settings/repository/${REPOSITORY_NAME}.yaml" || {
+            echo "::error::Missing .settings/repository/${REPOSITORY_NAME}.yaml for discovered repository ${REPOSITORY_FULL}"
             exit 1
           }
 
       - name: Merge general + repository settings into single YAML (using yq)
-        env:
-          REPOSITORY: ${{ matrix.repository }}
         run: |
+          REPOSITORY_FULL='${{ matrix.repository }}'
+          REPOSITORY_NAME="${REPOSITORY_FULL##*/}"   # plain repo name to find file
           MERGED="${{ runner.temp }}/settings.yml"
-          if [ -f ".settings/general.yaml" ] && [ -f ".settings/repository/${REPOSITORY}.yaml" ]; then
-            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' .settings/general.yaml .settings/repository/${REPOSITORY}.yaml > "$MERGED"
-          elif [ -f ".settings/repository/${REPOSITORY}.yaml" ]; then
-            cp .settings/repository/${REPOSITORY}.yaml "$MERGED"
+
+          if [ -f ".settings/general.yaml" ] && [ -f ".settings/repository/${REPOSITORY_NAME}.yaml" ]; then
+            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' .settings/general.yaml .settings/repository/${REPOSITORY_NAME}.yaml > "$MERGED"
+          elif [ -f ".settings/repository/${REPOSITORY_NAME}.yaml" ]; then
+            cp .settings/repository/${REPOSITORY_NAME}.yaml "$MERGED"
           elif [ -f ".settings/general.yaml" ]; then
             cp .settings/general.yaml "$MERGED"
           else
-            echo "::error::No settings file found (neither .settings/general.yaml nor .settings/repository/${REPOSITORY}.yaml)"
+            echo "::error::No settings file found (neither .settings/general.yaml nor .settings/repository/${REPOSITORY_NAME}.yaml)"
             exit 1
           fi
+
           echo "Merged settings written to $MERGED"
           echo "----- merged preview -----"
           head -n 200 "$MERGED" || true
-
-      - name: "[Debug] show repository being checked"
-        run: |
-          echo "Checking repository: carstencodes/${{ matrix.repository }}"
 
       - name: Check repository settings
         uses: Vivswan/github-settings-as-code@v2
         with:
           token: ${{ secrets.ADMIN_TOKEN }}
           mode: check
-          owner: carstencodes
-          repository: ${{ matrix.repository }}
+          # pass single scalar owner/repo (no owner: field). Quoted to avoid YAML splitting.
+          repository: "${{ matrix.repository }}"
           settings-file: ${{ runner.temp }}/settings.yml
