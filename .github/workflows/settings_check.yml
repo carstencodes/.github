@@ -22,7 +22,7 @@ jobs:
         run: |
           # Emit owner/repo (.full_name) one per line, excluding forks/archived/private
           gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' \
-            --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .full_name' \
+            --jq '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .full_name' \
             > repo-names.txt || true
 
           # Build a JSON array from newline-separated owner/repo strings
