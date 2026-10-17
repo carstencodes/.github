@@ -37,6 +37,7 @@ jobs:
         repository: ${{ fromJSON(needs.discover.outputs.repositories) }}
     steps:
       - uses: actions/checkout@v7
+
       - name: Require repository settings file
         env:
           REPOSITORY: ${{ matrix.repository }}
@@ -45,14 +46,28 @@ jobs:
             echo "::error::Missing .settings/repository/${REPOSITORY}.yaml for discovered repository carstencodes/${REPOSITORY}"
             exit 1
           }
-      - name: Render shared and repository settings
-        uses: Vivswan/github-settings-as-code@v2
-        with:
-          mode: render
-          settings-file: |
-            .settings/general.yaml
-            .settings/repository/${{ matrix.repository }}.yaml
-          rendered-file: ${{ runner.temp }}/settings.yml
+
+      - name: Merge general + repository settings into single YAML (using yq)
+        env:
+          REPOSITORY: ${{ matrix.repository }}
+        run: |
+          MERGED="${{ runner.temp }}/settings.yml"
+          # yq is expected to be available on the runner image
+          if [ -f ".settings/general.yaml" ] && [ -f ".settings/repository/${REPOSITORY}.yaml" ]; then
+            # deep-merge: general.yaml * repo.yaml (repo overrides)
+            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' .settings/general.yaml .settings/repository/${REPOSITORY}.yaml > "$MERGED"
+          elif [ -f ".settings/repository/${REPOSITORY}.yaml" ]; then
+            cp .settings/repository/${REPOSITORY}.yaml "$MERGED"
+          elif [ -f ".settings/general.yaml" ]; then
+            cp .settings/general.yaml "$MERGED"
+          else
+            echo "::error::No settings file found (neither .settings/general.yaml nor .settings/repository/${REPOSITORY}.yaml)"
+            exit 1
+          fi
+          echo "Merged settings written to $MERGED"
+          echo "----- merged preview -----"
+          head -n 200 "$MERGED" || true
+
       - name: Apply repository settings
         uses: Vivswan/github-settings-as-code@v2
         with:
