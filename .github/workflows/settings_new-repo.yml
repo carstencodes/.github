@@ -28,19 +28,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure gh is available
-        run: |
-          if ! command -v gh >/dev/null 2>&1; then
-            echo "gh not found, installing..."
-            sudo apt-get update
-            sudo apt-get install -y gh
-          fi
-          gh --version
-
       - name: Propose default settings for missing repositories
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
-          OWNER: carstencodes
           SETTINGS_DIR: .settings/repository
           IGNORE_FILE: .settings/.settingsignore
         run: |
@@ -48,7 +38,7 @@ jobs:
           export GH_TOKEN="${ADMIN_TOKEN}"
 
           # Discover public, non-fork, non-archived repositories owned by $OWNER
-          repos="$(gh api --paginate "users/${OWNER}/repos?per_page=100&type=owner&sort=full_name" --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
+          repos="$(gh api --paginate "users/${{ github.repository_owner }}/repos?per_page=100&type=owner&sort=full_name" --jq -r '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .name')"
 
           # Apply ignore list (optional). The ignore file supports simple globbing (*)
           if [ -f "${IGNORE_FILE}" ]; then
@@ -77,7 +67,7 @@ jobs:
           fi
 
           # Push destination repo URL using token
-          remote_url="https://x-access-token:${ADMIN_TOKEN}@github.com/${OWNER}/.github.git"
+          remote_url="https://x-access-token:${ADMIN_TOKEN}@github.com/${{ github.repository }}.git"
 
           # For each repo, if settings file missing, create branch, add file, push and open PR
           while IFS= read -r repo || [ -n "$repo" ]; do
