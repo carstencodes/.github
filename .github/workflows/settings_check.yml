@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
           # Emit owner/repo (.full_name) one per line, excluding forks/archived/private
-          gh api --paginate 'users/carstencodes/repos?per_page=100&type=owner&sort=full_name' \
+          gh api --paginate 'users/${{ github.repository_owner }}/repos?per_page=100&type=owner&sort=full_name' \
             --jq '.[] | select(.visibility == "public" and (.fork | not) and (.archived | not)) | .full_name' \
             > repo-names.txt || true
 
@@ -39,12 +39,13 @@ jobs:
           # Filter out repos matching ignore patterns (glob where * matches any substring)
           # Output directly to file (don't capture in $() simultaneously)
           while IFS= read -r repo; do
+            repo_name="${repo##*/}"
             match=false
             while IFS= read -r pattern; do
               [[ -z "$pattern" ]] && continue
               # Convert glob pattern to regex (* -> .*)
               regex_pattern="^${pattern//\*/.*}$"
-              if [[ "$repo" =~ $regex_pattern ]]; then
+              if [[ "$repo_name" =~ $regex_pattern ]]; then
                 match=true
                 break
               fi
