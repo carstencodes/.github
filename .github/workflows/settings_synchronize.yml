@@ -104,7 +104,7 @@ jobs:
           head -n 200 "$MERGED" || true
 
       - name: Apply repository settings
-        uses: Vivswan/github-settings-as-code@v2
+        uses: Vivswan/github-settings-as-code@v3
         with:
           token: ${{ secrets.ADMIN_TOKEN }}
           repository: carstencodes/${{ matrix.repository }}

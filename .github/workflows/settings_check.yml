@@ -105,7 +105,7 @@ jobs:
           head -n 200 "$MERGED" || true
 
       - name: Check repository settings
-        uses: Vivswan/github-settings-as-code@v2
+        uses: Vivswan/github-settings-as-code@v3
         continue-on-error: true
         with:
           token: ${{ secrets.ADMIN_TOKEN }}
